@@ -29,6 +29,15 @@
       />
       
       <v-btn
+        icon="mdi-view-split-vertical"
+        variant="text"
+        size="small"
+        @click="toggleContextVisibility"
+        :color="showContext ? 'primary' : 'default'"
+        title="Toggle Context Panel"
+      />
+      
+      <v-btn
         icon="mdi-help-circle-outline"
         variant="text"
         size="small"
@@ -36,11 +45,11 @@
     </v-app-bar>
 
     <v-main>
-      <div class="d-flex h-100">
+      <div class="d-flex h-100" style="min-height: calc(100vh - 56px);">
         <div class="chat-container">
           <ChatView />
         </div>
-        <div class="context-container">
+        <div v-if="showContext" class="context-container">
           <ContextView 
             v-model="contextStore.contextText" 
             @prompt-request="handlePromptRequest"
@@ -75,6 +84,7 @@ import { useDebugStore } from './stores/debug'
 
 // État
 const showDebugModal = ref(false)
+const showContext = ref(true)
 
 // Stores
 const configStore = useConfigStore()
@@ -139,6 +149,11 @@ const handlePromptRequest = async ({ prompt, currentContext, callback }) => {
     callback(currentContext)
   }
 }
+
+// Toggle context visibility
+const toggleContextVisibility = () => {
+  showContext.value = !showContext.value
+}
 </script>
 
 <style>
@@ -151,15 +166,19 @@ html, body, #app {
 
 .chat-container {
   flex: 2;
+  min-width: 0; /* Permet au flexbox de rétrécir */
   height: calc(100vh - 56px);
   padding: 20px;
   padding-right: 10px;
+  overflow: hidden;
 }
 
 .context-container {
   flex: 1;
+  min-width: 300px; /* Largeur minimale pour éviter que ça disparaisse */
   height: calc(100vh - 56px);
   padding: 20px;
   padding-left: 10px;
+  border-left: 1px solid #e0e0e0;
 }
 </style>

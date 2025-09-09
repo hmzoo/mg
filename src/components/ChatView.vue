@@ -1,15 +1,16 @@
 <template>
     <v-card
-    class="mx-auto"
+    class="mx-auto d-flex flex-column"
     max-width="none"
-    height="600">
+    height="100%">
     <v-toolbar color="primary">
       <v-toolbar-title>Chat IA</v-toolbar-title>
     </v-toolbar>
 
     <v-card-text
-      class="flex-grow-1 overflow-y-auto"
+      class="flex-grow-1 overflow-y-auto messages-container"
       ref="messagesContainer"
+      style="height: 0;"
     >
       <div
         v-for="message in messages"
@@ -266,18 +267,68 @@ const renderMarkdown = (text) => {
   return tempDiv.innerHTML;
 };
 
-const scrollToBottom = () => {
-  nextTick(() => {
-    if (messagesContainer.value) {
-      const element = messagesContainer.value.$el || messagesContainer.value;
-      if (element && element.scrollHeight) {
-        element.scrollTop = element.scrollHeight;
+const scrollToBottom = (force = false) => {
+  const doScroll = (attempt = 0) => {
+    // Essayer plusieurs méthodes pour obtenir l'élément
+    let element = messagesContainer.value;
+    
+    // Si la ref n'est pas disponible, chercher dans le DOM
+    if (!element) {
+      element = document.querySelector('.messages-container');
+    }
+    
+    // Si toujours pas trouvé, chercher par ref
+    if (!element) {
+      const card = document.querySelector('.v-card-text');
+      if (card && card.classList.contains('messages-container')) {
+        element = card;
       }
     }
+    
+    if (!element) {
+      console.log(`Scroll attempt ${attempt + 1}: Élément non trouvé`);
+      if (attempt < 5) {
+        setTimeout(() => doScroll(attempt + 1), 200);
+      }
+      return;
+    }
+    
+    // Vérifier que l'élément a les propriétés de scroll
+    if (typeof element.scrollTop === 'undefined') {
+      console.log(`Scroll attempt ${attempt + 1}: Élément trouvé mais pas de propriétés de scroll`);
+      if (attempt < 5) {
+        setTimeout(() => doScroll(attempt + 1), 200);
+      }
+      return;
+    }
+    
+    console.log(`Scroll attempt ${attempt + 1}:`, {
+      scrollTop: element.scrollTop,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      canScroll: element.scrollHeight > element.clientHeight,
+      elementType: element.tagName,
+      elementClasses: element.className
+    });
+    
+    if (element.scrollHeight > element.clientHeight) {
+      const isAtBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 10;
+      
+      if (force || isAtBottom) {
+        element.scrollTop = element.scrollHeight;
+        console.log('Scroll vers le bas effectué, nouveau scrollTop:', element.scrollTop);
+      }
+    } else if (attempt < 5) {
+      // Si le contenu n'est pas encore assez grand, réessayer
+      setTimeout(() => doScroll(attempt + 1), 200);
+    }
+  };
+  
+  // Attendre que Vue ait terminé le rendu
+  nextTick(() => {
+    doScroll();
   });
-};
-
-const triggerFileInput = () => {
+};const triggerFileInput = () => {
   fileInput.value.click();
 };
 
@@ -317,9 +368,8 @@ const getIaResponse = async (userMessage) => {
     });
     
     // Scroll vers le bas après réception de la réponse
-    scrollToBottom();
-    setTimeout(() => scrollToBottom(), 100);
-    setTimeout(() => scrollToBottom(), 500);
+    setTimeout(() => scrollToBottom(true), 100);
+    setTimeout(() => scrollToBottom(true), 300);
     
   } catch (error) {
     console.error('Erreur lors de la communication avec l\'IA:', error);
@@ -332,7 +382,7 @@ const getIaResponse = async (userMessage) => {
       file: null
     });
     
-    scrollToBottom();
+    setTimeout(() => scrollToBottom(true), 100);
   }
 };
 
@@ -362,11 +412,8 @@ const sendMessage = async () => {
   newMessage.value = '';
   removeAttachment();
   
-  // Multiple tentatives de scroll pour s'assurer que ça fonctionne
-  scrollToBottom();
-  setTimeout(() => scrollToBottom(), 50);
-  setTimeout(() => scrollToBottom(), 200);
-  setTimeout(() => scrollToBottom(), 500);
+  // Scroll après ajout du message utilisateur
+  setTimeout(() => scrollToBottom(true), 50);
   
   // Appeler l'IA avec le message utilisateur
   await getIaResponse(userMessageText);
@@ -381,7 +428,26 @@ onMounted(() => {
     file: null
   });
   
-  scrollToBottom();
+  // Debug: vérifier l'état de l'élément
+  console.log('onMounted - État de messagesContainer:', {
+    refValue: messagesContainer.value,
+    domElement: document.querySelector('.messages-container'),
+    refType: typeof messagesContainer.value
+  });
+  
+  // Attendre que le composant soit monté avec plusieurs tentatives
+  const waitForElement = () => {
+    const element = messagesContainer.value || document.querySelector('.messages-container');
+    if (element && element.scrollTop !== undefined) {
+      console.log('Élément trouvé, déclenchement du scroll');
+      scrollToBottom(true);
+    } else {
+      console.log('Élément pas encore prêt, nouvelle tentative dans 100ms');
+      setTimeout(waitForElement, 100);
+    }
+  };
+  
+  setTimeout(waitForElement, 100);
 });
 </script>
 
