@@ -271,10 +271,12 @@ const scrollToBottom = (force = false) => {
   const doScroll = (attempt = 0) => {
     // Essayer plusieurs méthodes pour obtenir l'élément
     let element = messagesContainer.value;
+    let elementSource = 'ref';
     
     // Si la ref n'est pas disponible, chercher dans le DOM
     if (!element) {
       element = document.querySelector('.messages-container');
+      elementSource = 'querySelector-class';
     }
     
     // Si toujours pas trouvé, chercher par ref
@@ -282,34 +284,37 @@ const scrollToBottom = (force = false) => {
       const card = document.querySelector('.v-card-text');
       if (card && card.classList.contains('messages-container')) {
         element = card;
+        elementSource = 'querySelector-v-card-text';
       }
     }
     
     if (!element) {
       console.log(`Scroll attempt ${attempt + 1}: Élément non trouvé`);
-      if (attempt < 5) {
+      if (attempt < 10) {
         setTimeout(() => doScroll(attempt + 1), 200);
       }
       return;
     }
+    
+    console.log(`Scroll attempt ${attempt + 1}: Élément trouvé via ${elementSource}`, {
+      element: element,
+      tagName: element.tagName,
+      className: element.className,
+      scrollTop: element.scrollTop,
+      hasScrollTop: 'scrollTop' in element,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      style: element.style.cssText
+    });
     
     // Vérifier que l'élément a les propriétés de scroll
     if (typeof element.scrollTop === 'undefined') {
       console.log(`Scroll attempt ${attempt + 1}: Élément trouvé mais pas de propriétés de scroll`);
-      if (attempt < 5) {
+      if (attempt < 10) {
         setTimeout(() => doScroll(attempt + 1), 200);
       }
       return;
     }
-    
-    console.log(`Scroll attempt ${attempt + 1}:`, {
-      scrollTop: element.scrollTop,
-      clientHeight: element.clientHeight,
-      scrollHeight: element.scrollHeight,
-      canScroll: element.scrollHeight > element.clientHeight,
-      elementType: element.tagName,
-      elementClasses: element.className
-    });
     
     if (element.scrollHeight > element.clientHeight) {
       const isAtBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 10;
@@ -318,9 +323,12 @@ const scrollToBottom = (force = false) => {
         element.scrollTop = element.scrollHeight;
         console.log('Scroll vers le bas effectué, nouveau scrollTop:', element.scrollTop);
       }
-    } else if (attempt < 5) {
-      // Si le contenu n'est pas encore assez grand, réessayer
-      setTimeout(() => doScroll(attempt + 1), 200);
+    } else {
+      console.log(`Contenu pas encore assez grand (scrollHeight: ${element.scrollHeight}, clientHeight: ${element.clientHeight})`);
+      if (attempt < 10) {
+        // Si le contenu n'est pas encore assez grand, réessayer
+        setTimeout(() => doScroll(attempt + 1), 200);
+      }
     }
   };
   
@@ -438,16 +446,27 @@ onMounted(() => {
   // Attendre que le composant soit monté avec plusieurs tentatives
   const waitForElement = () => {
     const element = messagesContainer.value || document.querySelector('.messages-container');
-    if (element && element.scrollTop !== undefined) {
-      console.log('Élément trouvé, déclenchement du scroll');
+    console.log('waitForElement check:', {
+      refElement: messagesContainer.value,
+      domElement: document.querySelector('.messages-container'),
+      selectedElement: element,
+      hasScrollTop: element ? ('scrollTop' in element) : false,
+      scrollTop: element ? element.scrollTop : 'N/A',
+      clientHeight: element ? element.clientHeight : 'N/A',
+      scrollHeight: element ? element.scrollHeight : 'N/A'
+    });
+    
+    if (element && 'scrollTop' in element && element.clientHeight > 0) {
+      console.log('Élément prêt, déclenchement du scroll');
       scrollToBottom(true);
     } else {
-      console.log('Élément pas encore prêt, nouvelle tentative dans 100ms');
-      setTimeout(waitForElement, 100);
+      console.log('Élément pas encore prêt, nouvelle tentative dans 200ms');
+      setTimeout(waitForElement, 200);
     }
   };
   
-  setTimeout(waitForElement, 100);
+  // Attendre un peu plus longtemps pour que Vuetify termine son rendu
+  setTimeout(waitForElement, 300);
 });
 </script>
 
