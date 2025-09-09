@@ -269,29 +269,29 @@ const renderMarkdown = (text) => {
 
 const scrollToBottom = (force = false) => {
   const doScroll = (attempt = 0) => {
-    // Essayer plusieurs méthodes pour obtenir l'élément
-    let element = messagesContainer.value;
-    let elementSource = 'ref';
+    // L'élément de la ref Vue est un proxy, nous devons obtenir l'élément DOM réel
+    let element = null;
     
-    // Si la ref n'est pas disponible, chercher dans le DOM
-    if (!element) {
-      element = document.querySelector('.messages-container');
-      elementSource = 'querySelector-class';
-    }
+    // Méthode 1: Utiliser querySelector direct (le plus fiable)
+    element = document.querySelector('.messages-container');
+    let elementSource = 'querySelector-direct';
     
-    // Si toujours pas trouvé, chercher par ref
-    if (!element) {
-      const card = document.querySelector('.v-card-text');
-      if (card && card.classList.contains('messages-container')) {
-        element = card;
-        elementSource = 'querySelector-v-card-text';
+    // Méthode 2: Si pas trouvé, essayer d'extraire l'élément du proxy Vue
+    if (!element && messagesContainer.value) {
+      // Le proxy Vue peut avoir une propriété $el ou être l'élément lui-même après unwrap
+      if (messagesContainer.value.$el) {
+        element = messagesContainer.value.$el;
+        elementSource = 'vue-ref-$el';
+      } else if (messagesContainer.value.nodeType) {
+        element = messagesContainer.value;
+        elementSource = 'vue-ref-direct';
       }
     }
     
     if (!element) {
-      console.log(`Scroll attempt ${attempt + 1}: Élément non trouvé`);
-      if (attempt < 10) {
-        setTimeout(() => doScroll(attempt + 1), 200);
+      console.log(`Scroll attempt ${attempt + 1}: Aucun élément trouvé`);
+      if (attempt < 5) {
+        setTimeout(() => doScroll(attempt + 1), 300);
       }
       return;
     }
@@ -301,17 +301,16 @@ const scrollToBottom = (force = false) => {
       tagName: element.tagName,
       className: element.className,
       scrollTop: element.scrollTop,
-      hasScrollTop: 'scrollTop' in element,
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight,
-      style: element.style.cssText
+      hasScrollProperties: typeof element.scrollTop !== 'undefined'
     });
     
-    // Vérifier que l'élément a les propriétés de scroll
-    if (typeof element.scrollTop === 'undefined') {
-      console.log(`Scroll attempt ${attempt + 1}: Élément trouvé mais pas de propriétés de scroll`);
-      if (attempt < 10) {
-        setTimeout(() => doScroll(attempt + 1), 200);
+    // Vérifier que l'élément a des dimensions et peut faire du scroll
+    if (typeof element.scrollTop === 'undefined' || element.clientHeight === 0) {
+      console.log(`Scroll attempt ${attempt + 1}: Élément pas encore prêt pour le scroll`);
+      if (attempt < 5) {
+        setTimeout(() => doScroll(attempt + 1), 300);
       }
       return;
     }
@@ -321,13 +320,14 @@ const scrollToBottom = (force = false) => {
       
       if (force || isAtBottom) {
         element.scrollTop = element.scrollHeight;
-        console.log('Scroll vers le bas effectué, nouveau scrollTop:', element.scrollTop);
+        console.log('✅ Scroll vers le bas effectué, nouveau scrollTop:', element.scrollTop);
+      } else {
+        console.log('Pas besoin de scroll, utilisateur n\'est pas en bas');
       }
     } else {
-      console.log(`Contenu pas encore assez grand (scrollHeight: ${element.scrollHeight}, clientHeight: ${element.clientHeight})`);
-      if (attempt < 10) {
-        // Si le contenu n'est pas encore assez grand, réessayer
-        setTimeout(() => doScroll(attempt + 1), 200);
+      console.log(`Contenu pas encore assez grand pour scroller (scrollHeight: ${element.scrollHeight}, clientHeight: ${element.clientHeight})`);
+      if (attempt < 5) {
+        setTimeout(() => doScroll(attempt + 1), 300);
       }
     }
   };
@@ -443,30 +443,29 @@ onMounted(() => {
     refType: typeof messagesContainer.value
   });
   
-  // Attendre que le composant soit monté avec plusieurs tentatives
-  const waitForElement = () => {
-    const element = messagesContainer.value || document.querySelector('.messages-container');
-    console.log('waitForElement check:', {
-      refElement: messagesContainer.value,
-      domElement: document.querySelector('.messages-container'),
-      selectedElement: element,
+  // Attendre que le composant soit monté avec vérification simple
+  const waitForElement = (attempt = 0) => {
+    const element = document.querySelector('.messages-container');
+    console.log(`waitForElement attempt ${attempt + 1}:`, {
+      elementFound: !!element,
       hasScrollTop: element ? ('scrollTop' in element) : false,
-      scrollTop: element ? element.scrollTop : 'N/A',
       clientHeight: element ? element.clientHeight : 'N/A',
       scrollHeight: element ? element.scrollHeight : 'N/A'
     });
     
     if (element && 'scrollTop' in element && element.clientHeight > 0) {
-      console.log('Élément prêt, déclenchement du scroll');
+      console.log('✅ Élément prêt, déclenchement du scroll');
       scrollToBottom(true);
+    } else if (attempt < 10) {
+      console.log(`⏳ Élément pas encore prêt, nouvelle tentative dans 300ms (${attempt + 1}/10)`);
+      setTimeout(() => waitForElement(attempt + 1), 300);
     } else {
-      console.log('Élément pas encore prêt, nouvelle tentative dans 200ms');
-      setTimeout(waitForElement, 200);
+      console.log('❌ Abandon après 10 tentatives');
     }
   };
   
   // Attendre un peu plus longtemps pour que Vuetify termine son rendu
-  setTimeout(waitForElement, 300);
+  setTimeout(() => waitForElement(), 500);
 });
 </script>
 
